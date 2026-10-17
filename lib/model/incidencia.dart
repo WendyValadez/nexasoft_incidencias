@@ -6,6 +6,7 @@ class Incidencia {
   String categoria;
   String estado;
   String fecha;
+  String prioridad; // Nueva propiedad
 
   Incidencia({
     required this.id,
@@ -15,6 +16,7 @@ class Incidencia {
     required this.categoria,
     required this.estado,
     required this.fecha,
+    this.prioridad = 'Media', // Valor por defecto
   });
 
   factory Incidencia.desdeJson(Map<String, dynamic> m) {
@@ -26,6 +28,11 @@ class Incidencia {
       categoria: m['categoria']?.toString() ?? 'Software',
       estado: m['estado']?.toString() ?? 'Pendiente',
       fecha: m['fecha']?.toString() ?? '',
+      prioridad: ['Baja', 'Media', 'Alta'].contains(
+        m['prioridad']?.toString(),
+      )
+          ? m['prioridad'].toString()
+          : 'Media',
     );
   }
 
@@ -38,6 +45,7 @@ class Incidencia {
       'categoria': categoria,
       'estado': estado,
       'fecha': fecha,
+      'prioridad': prioridad, // Guardar la prioridad
     };
   }
 }
