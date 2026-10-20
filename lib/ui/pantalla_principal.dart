@@ -13,9 +13,27 @@ class PantallaPrincipal extends StatefulWidget {
 
 class _PantallaPrincipalState extends State<PantallaPrincipal> {
   final GestorIncidencias g = GestorIncidencias();
+  final TextEditingController controladorBusqueda = TextEditingController();
+
   bool cargando = true;
   String? error;
   String busqueda = '';
+  String filtroEstado = 'Todos';
+  String filtroPrioridad = 'Todas';
+
+  final List<String> estados = [
+    'Todos',
+    'Pendiente',
+    'En proceso',
+    'Resuelta',
+  ];
+
+  final List<String> prioridades = [
+    'Todas',
+    'Baja',
+    'Media',
+    'Alta',
+  ];
 
   @override
   void initState() {
@@ -23,16 +41,24 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     cargar();
   }
 
+  @override
+  void dispose() {
+    controladorBusqueda.dispose();
+    super.dispose();
+  }
+
   Future<void> cargar() async {
     setState(() {
       cargando = true;
       error = null;
     });
+
     try {
       await g.iniciar();
     } catch (e) {
       error = 'No se pudieron cargar las incidencias: $e';
     }
+
     if (mounted) setState(() => cargando = false);
   }
 
@@ -51,9 +77,18 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
             children: [
               Icon(icono, size: 19, color: const Color(0xFF174C83)),
               const SizedBox(height: 4),
-              Text(valor, style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-              Text(etiqueta, textAlign: TextAlign.center,
-                  style: const TextStyle(fontSize: 12)),
+              Text(
+                valor,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              Text(
+                etiqueta,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 12),
+              ),
             ],
           ),
         ),
@@ -61,11 +96,36 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
     );
   }
 
+  List<Incidencia> obtenerIncidenciasFiltradas() {
+    return g.buscar(busqueda).where((item) {
+      final coincideEstado =
+          filtroEstado == 'Todos' || item.estado == filtroEstado;
+
+      final coincidePrioridad =
+          filtroPrioridad == 'Todas' ||
+          item.prioridad == filtroPrioridad;
+
+      return coincideEstado && coincidePrioridad;
+    }).toList();
+  }
+
+  void limpiarFiltros() {
+    setState(() {
+      controladorBusqueda.clear();
+      busqueda = '';
+      filtroEstado = 'Todos';
+      filtroPrioridad = 'Todas';
+    });
+  }
+
   Future<void> abrirDetalle(Incidencia item) async {
     await Navigator.push<void>(
       context,
-      MaterialPageRoute(builder: (_) => PantallaDetalle(gestor: g, id: item.id)),
+      MaterialPageRoute(
+        builder: (_) => PantallaDetalle(gestor: g, id: item.id),
+      ),
     );
+
     if (mounted) setState(() {});
   }
 
@@ -74,6 +134,7 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       context,
       MaterialPageRoute(builder: (_) => PantallaNueva(gestor: g)),
     );
+
     if (guardado == true && mounted) {
       setState(() {});
       ScaffoldMessenger.of(context).showSnackBar(
@@ -84,7 +145,8 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
 
   @override
   Widget build(BuildContext context) {
-    final items = g.buscar(busqueda);
+    final items = obtenerIncidenciasFiltradas();
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('NexaSoft | Incidencias'),
@@ -96,21 +158,33 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                 context: context,
                 builder: (ctx) => AlertDialog(
                   title: const Text('Restablecer demostración'),
-                  content: const Text('Se descartarán los cambios locales y se cargarán las incidencias iniciales.'),
+                  content: const Text(
+                    'Se descartarán los cambios locales y se cargarán '
+                    'las incidencias iniciales.',
+                  ),
                   actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
-                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Restablecer')),
+                    TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Cancelar'),
+                    ),
+                    FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Restablecer'),
+                    ),
                   ],
                 ),
               );
-              if (aceptar != true) return;
+              if (!mounted || aceptar != true) return;
+
               try {
                 await g.reiniciarDemo();
-                if (mounted) setState(() {});
+                if (!mounted) return;
+                setState(() {});
               } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error al reiniciar: $e')));
-                }
+                if (!mounted) return;
+                setState(() {
+                  error = 'Error al reiniciar: $e';
+                });
               }
             },
             icon: const Icon(Icons.restart_alt),
@@ -127,14 +201,22 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
       body: cargando
           ? const Center(child: CircularProgressIndicator())
           : error != null
-              ? Center(child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Column(mainAxisSize: MainAxisSize.min, children: [
-                    Text(error!, textAlign: TextAlign.center),
-                    const SizedBox(height: 12),
-                    FilledButton(onPressed: cargar, child: const Text('Reintentar')),
-                  ]),
-                ))
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(error!, textAlign: TextAlign.center),
+                        const SizedBox(height: 12),
+                        FilledButton(
+                          onPressed: cargar,
+                          child: const Text('Reintentar'),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
               : Center(
                   child: ConstrainedBox(
                     constraints: const BoxConstraints(maxWidth: 860),
@@ -142,55 +224,169 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                       children: [
                         Padding(
                           padding: const EdgeInsets.fromLTRB(12, 14, 12, 8),
-                          child: Row(children: [
-                            resumen('Pendientes', '${g.contar('Pendiente')}', Icons.pending_actions),
-                            resumen('En proceso', '${g.contar('En proceso')}', Icons.build_outlined),
-                            resumen('Resueltas', '${g.contar('Resuelta')}', Icons.check_circle_outline),
-                          ]),
+                          child: Row(
+                            children: [
+                              resumen(
+                                'Pendientes',
+                                '${g.contar('Pendiente')}',
+                                Icons.pending_actions,
+                              ),
+                              resumen(
+                                'En proceso',
+                                '${g.contar('En proceso')}',
+                                Icons.build_outlined,
+                              ),
+                              resumen(
+                                'Resueltas',
+                                '${g.contar('Resuelta')}',
+                                Icons.check_circle_outline,
+                              ),
+                            ],
+                          ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 17, vertical: 5),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 17,
+                            vertical: 5,
+                          ),
                           child: TextField(
+                            controller: controladorBusqueda,
                             decoration: const InputDecoration(
                               labelText: 'Buscar incidencias',
                               hintText: 'Ejemplo: WiFi, correo, pantalla',
                               prefixIcon: Icon(Icons.search),
                               border: OutlineInputBorder(),
                             ),
-                            onChanged: (texto) => setState(() => busqueda = texto),
+                            onChanged: (texto) {
+                              setState(() => busqueda = texto);
+                            },
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: Text('${items.length} registros', style: const TextStyle(color: Colors.black54)),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 17,
+                            vertical: 5,
+                          ),
+                          child: Wrap(
+                            spacing: 12,
+                            runSpacing: 8,
+                            children: [
+                              SizedBox(
+                                width: 250,
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: filtroEstado,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Filtrar por estado',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: estados.map((estado) {
+                                    return DropdownMenuItem(
+                                      value: estado,
+                                      child: Text(estado),
+                                    );
+                                  }).toList(),
+                                  onChanged: (valor) {
+                                    if (valor == null) return;
+                                    setState(() => filtroEstado = valor);
+                                  },
+                                ),
+                              ),
+                              SizedBox(
+                                width: 250,
+                                child: DropdownButtonFormField<String>(
+                                  initialValue: filtroPrioridad,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Filtrar por prioridad',
+                                    border: OutlineInputBorder(),
+                                  ),
+                                  items: prioridades.map((prioridad) {
+                                    return DropdownMenuItem(
+                                      value: prioridad,
+                                      child: Text(prioridad),
+                                    );
+                                  }).toList(),
+                                  onChanged: (valor) {
+                                    if (valor == null) return;
+                                    setState(() => filtroPrioridad = valor);
+                                  },
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 17,
+                            vertical: 4,
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '${items.length} registros',
+                                  style: const TextStyle(
+                                    color: Colors.black54,
+                                  ),
+                                ),
+                              ),
+                              TextButton.icon(
+                                onPressed: limpiarFiltros,
+                                icon: const Icon(Icons.filter_alt_off),
+                                label: const Text('Limpiar filtros'),
+                              ),
+                            ],
                           ),
                         ),
                         Expanded(
                           child: items.isEmpty
-                              ? const Center(child: Text('No se encontraron incidencias'))
+                              ? const Center(
+                                  child: Text(
+                                    'No se encontraron incidencias',
+                                  ),
+                                )
                               : ListView.builder(
-                                  padding: const EdgeInsets.only(left: 12, right: 12, bottom: 100),
+                                  padding: const EdgeInsets.only(
+                                    left: 12,
+                                    right: 12,
+                                    bottom: 100,
+                                  ),
                                   itemCount: items.length,
                                   itemBuilder: (context, i) {
                                     final item = items[i];
+
                                     return Card(
-                                      margin: const EdgeInsets.only(bottom: 10),
+                                      margin: const EdgeInsets.only(
+                                        bottom: 10,
+                                      ),
                                       child: ListTile(
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                                        title: Text(item.titulo, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                          horizontal: 16,
+                                          vertical: 8,
+                                        ),
+                                        title: Text(
+                                          item.titulo,
+                                          style: const TextStyle(
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
                                         subtitle: Padding(
-                                          padding: const EdgeInsets.only(top: 8),
+                                          padding:
+                                              const EdgeInsets.only(top: 8),
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
-                                              Text('${item.id}  ·  ${item.cliente}'),
+                                              Text(
+                                                '${item.id} · ${item.cliente}',
+                                              ),
                                               const SizedBox(height: 6),
                                               Text(
                                                 item.estado,
                                                 style: TextStyle(
-                                                  color: colorEstado(item.estado),
+                                                  color: colorEstado(
+                                                    item.estado,
+                                                  ),
                                                   fontWeight: FontWeight.bold,
                                                 ),
                                               ),
@@ -205,7 +401,8 @@ class _PantallaPrincipalState extends State<PantallaPrincipal> {
                                             ],
                                           ),
                                         ),
-                                        trailing: const Icon(Icons.chevron_right),
+                                        trailing:
+                                            const Icon(Icons.chevron_right),
                                         onTap: () => abrirDetalle(item),
                                       ),
                                     );
